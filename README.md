@@ -44,6 +44,8 @@ npm run build
 npm run test:e2e
 ```
 
+After deployment, `npm run test:live` checks production byte identity, security/cache headers, and the billing verification endpoint’s 429/`Retry-After` burst policy. It intentionally fails if any external release policy is unmet.
+
 The exact production build command is `npm run build`. Static output lands in `dist/`, with `index.html`, `/privacy/`, and `/terms/` ready for deployment. Playwright is pinned to 1.58.2; set `PLAYWRIGHT_BROWSERS_PATH` to the preinstalled browsers in factory workers or run `npx playwright install chromium` locally.
 
 For staging billing, build with `VITE_BILLING_API=https://pilot-api.sociobot.in/api/v1`. Production defaults to the public Sociobot API. Product IDs are not embedded; the stable product slug is used.
