@@ -2,7 +2,7 @@
 
 ## Release status
 
-**READY** for release verification.
+**DEPLOYED AND VERIFIED**.
 
 - Work order: `training-log-merge-repair-3`
 - Repaired candidate: `6d92e96d658a229219ba5b6650b43c48b7dd7ab4`
@@ -10,6 +10,7 @@
 - Artifact/deployment class: unchanged `pwa-offline` static site
 - Live URL: <https://training-log-merge.sociobot.in/>
 - Demo URL: <https://training-log-merge.sociobot.in/demo/>
+- Deployed repair commit: `c3995d2`
 
 ## Findings repaired
 
@@ -72,13 +73,13 @@ Visual evidence:
 
 ## Deployment and live verification
 
-Deploy `dist/` with:
+Deployed successfully through the factory static work order with:
 
 ```sh
 /opt/fleet/lib/deploy-static.sh training-log-merge /work/repo/dist
 ```
 
-Then run:
+Post-deploy commands:
 
 ```sh
 npm run test:live
@@ -86,8 +87,21 @@ VERIFY_NODE_MODULES=/work/repo/node_modules \
   /opt/fleet/lib/verify-url.sh https://training-log-merge.sociobot.in/ .factory/verification-artifacts/repair-live
 ```
 
-Live results will be recorded here immediately after deployment.
+Live results on 2026-08-28 UTC:
+
+- Deployment ID `156bc33b-5dff-495d-9ed2-3a21f7117322`: Succeeded to the existing Central US Static Web App; custom domain and managed TLS returned HTTP 200.
+- `npm run test:live`: PASS. Live HTML, application JS, and service worker are byte-identical to local `dist/`; CSP/Permissions-Policy and immutable/no-store cache policies pass.
+- Billing response policy: PASS, 30×HTTP 200 then 110×HTTP 429; all rate-limited responses included `Retry-After`.
+- `verify-url.sh` home: PASS in 650 ms with title, `lang=en`, one `h1`, main, all image alts, all button names, and zero console/page errors.
+- `verify-url.sh` demo: PASS in 769 ms with the demo title, one `h1`, main, all image alts, all button names, and zero console/page errors.
+- Live 390 px demo/offline/axe check: PASS; five sessions before and after offline reload, “Offline · ready”, same-origin requests only, no horizontal overflow, and zero serious/critical axe findings.
+- Live manifest: PASS with no Chromium manifest errors; standalone display, versioned start URL, 192/512 icons, and maskable purpose are present.
+- Live unknown route: PASS, HTTP 404 with the designed “This trail ends here” page and home action.
+- Live response headers: HTML revalidates at 30 seconds; hashed assets are one-year immutable; `sw.js` is no-store; CSP, Permissions-Policy, Referrer-Policy, and `nosniff` are present.
+- Live Lighthouse: 100 Performance, 100 Accessibility, 100 Best Practices, 100 SEO; FCP 1.0 s, LCP 1.3 s, CLS 0, TBT 20 ms, Speed Index 1.0 s.
+
+Live evidence is under `.factory/verification-artifacts/repair-live/`.
 
 ## Known gaps
 
-No release-blocking product gap is known. This static PWA has no package/consumer or authenticated-tenant surface, so those gates are not applicable. Billing remains external by contract and is checked by `npm run test:live` for 429 plus `Retry-After` behavior.
+No release-blocking product gap is known. This static PWA has no package/consumer or authenticated-tenant surface, so those gates are not applicable. Billing remains external by contract and passed the required live 429 plus `Retry-After` check.
