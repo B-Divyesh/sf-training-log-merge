@@ -47,6 +47,42 @@ test('has no serious accessibility violations in empty and dialog states', async
   expect(results.violations.filter((item) => ['serious', 'critical'].includes(item.impact ?? ''))).toEqual([]);
 });
 
+test('keeps keyboard focus inside dialogs in both directions', async ({ page }) => {
+  await page.goto('/');
+  const trigger = page.getByRole('button', { name: 'Import workouts' }).first();
+  await trigger.focus();
+  await trigger.press('Enter');
+  const dialog = page.getByRole('dialog', { name: 'Import workouts' });
+  const close = page.getByRole('button', { name: 'Close import dialog' });
+  const cancel = dialog.getByRole('button', { name: 'Cancel' });
+
+  await expect(close).toBeFocused();
+  await cancel.focus();
+  await page.keyboard.press('Tab');
+  await expect(close).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
+  await expect(cancel).toBeFocused();
+  expect(await page.evaluate(() => document.activeElement?.tagName)).not.toBe('BODY');
+
+  await page.keyboard.press('Escape');
+  await expect(dialog).not.toBeVisible();
+  await expect(trigger).toBeFocused();
+});
+
+test('shows impossible CSV dates as errors and never enables import', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Import workouts' }).first().click();
+  await page.locator('#workoutFiles').setInputFiles({
+    name: 'impossible.csv',
+    mimeType: 'text/csv',
+    buffer: Buffer.from('date,type,title,duration,distance\n2026-02-31 08:00,run,Impossible,30,5')
+  });
+  await expect(page.getByText('Some files need attention')).toBeVisible();
+  await expect(page.getByText(/2026-02-31 08:00.*not a valid calendar date/)).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Import new sessions' })).toBeDisabled();
+  await expect(page.getByText('Impossible', { exact: true })).not.toBeVisible();
+});
+
 test('mobile primary path remains usable at 390 CSS pixels', async ({ browser }) => {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
   const page = await context.newPage();

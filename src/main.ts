@@ -90,8 +90,8 @@ function initialTemplate(): string {
     <main id="main">
       <section class="hero" aria-labelledby="pageTitle">
         <picture class="hero-art">
-          <source type="image/webp" srcset="/assets/trail-ledger-768.webp 768w, /assets/trail-ledger-1536.webp 1536w" sizes="(max-width: 700px) 100vw, 1180px">
-          <img src="/assets/trail-ledger-1536.webp" width="1536" height="1024" alt="Illustrated field map where separate running routes and strength marks converge into one weekly ledger" fetchpriority="high" decoding="async">
+          <source type="image/webp" srcset="/assets/trail-ledger-768.01a67cdf.webp 768w, /assets/trail-ledger-1536.be14f7f2.webp 1536w" sizes="(max-width: 700px) 100vw, 1180px">
+          <img src="/assets/trail-ledger-1536.be14f7f2.webp" width="1536" height="1024" alt="Illustrated field map where separate running routes and strength marks converge into one weekly ledger" fetchpriority="high" decoding="async">
         </picture>
         <div class="hero-copy">
           <p class="eyebrow">Private weekly field log · ${html(timezone)}</p>
@@ -230,7 +230,33 @@ function showToast(message: string, action?: string): void {
   window.setTimeout(() => { toast.hidden = true; }, action ? 8000 : 4000);
 }
 
-function openDialog(id: string): void { document.querySelector<HTMLDialogElement>(`#${id}`)!.showModal(); }
+const dialogReturnFocus = new WeakMap<HTMLDialogElement, HTMLElement>();
+
+function dialogFocusable(dialog: HTMLDialogElement): HTMLElement[] {
+  return [...dialog.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')]
+    .filter((element) => element.getClientRects().length > 0 && element.getAttribute('aria-hidden') !== 'true');
+}
+
+function keepFocusInDialog(event: KeyboardEvent): void {
+  if (event.key !== 'Tab') return;
+  const dialog = event.currentTarget as HTMLDialogElement;
+  const focusable = dialogFocusable(dialog);
+  if (!focusable.length) { event.preventDefault(); dialog.focus(); return; }
+  const first = focusable[0];
+  const last = focusable.at(-1)!;
+  const active = document.activeElement;
+  if (!dialog.contains(active) || (event.shiftKey && active === first) || (!event.shiftKey && active === last)) {
+    event.preventDefault();
+    (event.shiftKey ? last : first).focus();
+  }
+}
+
+function openDialog(id: string): void {
+  const dialog = document.querySelector<HTMLDialogElement>(`#${id}`)!;
+  if (document.activeElement instanceof HTMLElement) dialogReturnFocus.set(dialog, document.activeElement);
+  dialog.showModal();
+  queueMicrotask(() => dialogFocusable(dialog)[0]?.focus());
+}
 function closeDialog(id: string): void { document.querySelector<HTMLDialogElement>(`#${id}`)!.close(); }
 
 function openImport(): void {
@@ -316,6 +342,14 @@ async function init(): Promise<void> {
 }
 
 function bindEvents(): void {
+  document.querySelectorAll<HTMLDialogElement>('dialog').forEach((dialog) => {
+    dialog.addEventListener('keydown', keepFocusInDialog);
+    dialog.addEventListener('close', () => {
+      const returnTarget = dialogReturnFocus.get(dialog);
+      if (returnTarget?.isConnected) returnTarget.focus();
+      dialogReturnFocus.delete(dialog);
+    });
+  });
   document.querySelector('#importButton')!.addEventListener('click', openImport);
   document.querySelector('#manualButton')!.addEventListener('click', openManual);
   document.querySelector('#settingsButton')!.addEventListener('click', () => openDialog('settingsDialog'));

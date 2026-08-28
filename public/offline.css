@@ -1,0 +1,16 @@
+body {
+  margin: 0;
+  background: #f4f0e6;
+  color: #18332e;
+  font: 18px/1.6 Arial, sans-serif;
+}
+
+main {
+  max-width: 42rem;
+  margin: 12vh auto;
+  padding: 2rem;
+}
+
+.mark { width: 4rem; }
+a { color: #84351f; font-weight: 700; }
+:focus-visible { outline: 3px solid #b84d2d; outline-offset: 4px; }

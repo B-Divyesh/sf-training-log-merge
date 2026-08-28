@@ -38,6 +38,8 @@ Requirements: Node.js 20+ and npm.
 npm ci
 npm run dev
 npm test
+npm run typecheck
+npm run lint
 npm run build
 npm run test:e2e
 ```

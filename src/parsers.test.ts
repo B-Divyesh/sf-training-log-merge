@@ -13,6 +13,23 @@ describe('training import normalization', () => {
     expect(localWallTimeToUtc('2026-08-28T07:30:00+02:00', 'UTC')).toBe('2026-08-28T05:30:00.000Z');
   });
 
+  it.each([
+    '2026-02-31 08:00',
+    '2026-02-31T08:00:00Z',
+    '2026-13-01 08:00',
+    '2026-04-31 08:00',
+    '2026-08-28 08:00 trailing'
+  ])('rejects an impossible or contaminated CSV date: %s', (date) => {
+    expect(() => parseCsv(`date,type,title,duration,distance\n${date},run,Impossible,30,5`, 'invalid.csv', 'UTC'))
+      .toThrow(/not a valid calendar date|not a supported date/);
+  });
+
+  it('accepts leap day only in leap years and rejects nonexistent local DST times', () => {
+    expect(localWallTimeToUtc('2028-02-29 08:00', 'UTC')).toBe('2028-02-29T08:00:00.000Z');
+    expect(() => localWallTimeToUtc('2027-02-29 08:00', 'UTC')).toThrow(/not a valid calendar date/);
+    expect(() => localWallTimeToUtc('2026-03-08 02:30', 'America/New_York')).toThrow(/does not exist/);
+  });
+
   it('parses quoted CSV, preserves source links, and normalizes seconds/meters', () => {
     const csv = [
       'start_date,activity_type,activity_name,elapsed_time,distance_m,notes,source,url',

@@ -41,14 +41,27 @@ function findValue(row: Record<string, string>, aliases: string[]): string {
 
 export function localWallTimeToUtc(value: string, timezone: string): string {
   const clean = value.trim().replace(' ', 'T');
-  if (/([zZ]|[+-]\d\d:?\d\d)$/.test(clean)) {
+  const zoned = clean.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?([zZ]|[+-]\d{2}:?\d{2})$/);
+  const local = clean.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})(?:T(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
+  const parts = zoned ?? local;
+  if (!parts) throw new Error(`“${value}” is not a supported date. Use YYYY-MM-DD HH:mm.`);
+
+  const [, yearRaw, monthRaw, dayRaw, hourRaw = '0', minuteRaw = '0', secondRaw = '0'] = parts;
+  const [year, month, day, hour, minute, second] = [yearRaw, monthRaw, dayRaw, hourRaw, minuteRaw, secondRaw].map(Number);
+  const leapYear = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const monthDays = [31, leapYear ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  if (month < 1 || month > 12 || day < 1 || day > (monthDays[month - 1] ?? 0)
+    || hour > 23 || minute > 59 || second > 59) {
+    throw new Error(`“${value}” is not a valid calendar date and time.`);
+  }
+
+  if (zoned) {
     const parsed = new Date(clean);
     if (Number.isNaN(parsed.getTime())) throw new Error(`“${value}” is not a valid date and time.`);
     return parsed.toISOString();
   }
-  const parts = clean.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})(?:T(\d{1,2}):?(\d{2})?(?::?(\d{2}))?)?/);
-  if (!parts) throw new Error(`“${value}” is not a supported date. Use YYYY-MM-DD HH:mm.`);
-  const intended = Date.UTC(+parts[1], +parts[2] - 1, +parts[3], +(parts[4] ?? 0), +(parts[5] ?? 0), +(parts[6] ?? 0));
+
+  const intended = Date.UTC(year, month - 1, day, hour, minute, second);
   let guess = intended;
   for (let i = 0; i < 2; i += 1) {
     const values = Object.fromEntries(new Intl.DateTimeFormat('en-CA', {
@@ -56,6 +69,13 @@ export function localWallTimeToUtc(value: string, timezone: string): string {
     }).formatToParts(new Date(guess)).filter((p) => p.type !== 'literal').map((p) => [p.type, +p.value]));
     const represented = Date.UTC(values.year, values.month - 1, values.day, values.hour, values.minute, values.second);
     guess += intended - represented;
+  }
+  const represented = Object.fromEntries(new Intl.DateTimeFormat('en-CA', {
+    timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23'
+  }).formatToParts(new Date(guess)).filter((part) => part.type !== 'literal').map((part) => [part.type, Number(part.value)]));
+  if (represented.year !== year || represented.month !== month || represented.day !== day
+    || represented.hour !== hour || represented.minute !== minute || represented.second !== second) {
+    throw new Error(`“${value}” does not exist in the ${timezone} time zone.`);
   }
   return new Date(guess).toISOString();
 }
@@ -87,7 +107,12 @@ export function parseCsv(text: string, fileName: string, timezone: string): Impo
     const distanceHeader = headers.find((h) => ['distancekm', 'kilometers', 'distance', 'distancem', 'meters'].includes(h)) ?? '';
     const rawDistance = numeric(distanceRaw);
     const distanceKm = rawDistance === undefined ? undefined : (/distancem|meters/.test(distanceHeader) ? rawDistance / 1000 : rawDistance);
-    const startedAt = localWallTimeToUtc(dateRaw, timezone);
+    let startedAt: string;
+    try { startedAt = localWallTimeToUtc(dateRaw, timezone); }
+    catch (error) {
+      const detail = error instanceof Error ? error.message : 'the date could not be read.';
+      throw new Error(`${fileName}, row ${index + 2}: ${detail}`);
+    }
     const type = normalizeType(findValue(row, ['activitytype', 'sport', 'type', 'category']));
     const workout: ImportCandidate = {
       id: crypto.randomUUID(), startedAt, timezone,

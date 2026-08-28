@@ -45,5 +45,5 @@ One original raster hero, `trail-ledger`, sits behind the opening ledger summary
 
 ## Original asset provenance
 
-- `public/assets/trail-ledger-768.webp` and `trail-ledger-1536.webp`: generated for this product on 2026-08-28 using the Factory Azure image deployment via `/opt/fleet/lib/gen-image.sh`, based on the production prompt above. The responsive exports are 48 KB and 200 KB. Original output and prompt sidecar are kept in `assets/src/`. AI-generated imagery is disclosed in the footer. No third-party trademarks or source images were used.
+- `public/assets/trail-ledger-768.01a67cdf.webp` and `trail-ledger-1536.be14f7f2.webp`: generated for this product on 2026-08-28 using the Factory Azure image deployment via `/opt/fleet/lib/gen-image.sh`, based on the production prompt above. The content-hashed responsive exports are 48 KB and 200 KB, allowing immutable production caching. Original output and prompt sidecar are kept in `assets/src/`. AI-generated imagery is disclosed in the footer. No third-party trademarks or source images were used.
 - App icons and interface icons are hand-authored SVG/CSS geometric marks created for this repository and released under the repository MIT license.

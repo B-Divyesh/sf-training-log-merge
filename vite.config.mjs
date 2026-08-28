@@ -10,7 +10,7 @@ function serviceWorkerManifest() {
     async closeBundle() {
       const dist = resolve(root, 'dist');
       const pages = ['index.html', 'privacy/index.html', 'terms/index.html'];
-      const urls = new Set(['/', '/offline.html', '/manifest.webmanifest', '/icon-192.png', '/icon-512.png']);
+      const urls = new Set(['/', '/offline.html', '/offline.css', '/manifest.webmanifest', '/icon-192.png', '/icon-512.png']);
       for (const page of pages) {
         const html = await readFile(resolve(dist, page), 'utf8');
         urls.add(`/${page}`);
