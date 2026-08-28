@@ -1,0 +1,8 @@
+{
+  "created": "2026-08-28",
+  "tool": "/opt/fleet/lib/gen-image.sh",
+  "deployment": "factory-image",
+  "size": "1536x1024",
+  "quality": "high",
+  "prompt": "Use case: stylized-concept. Asset type: responsive PWA hero illustration. A top-down folded cartographer's field map on a quiet desk, seven subtle vertical day bands, several distinct running route traces and small abstract barbell plate and set marks converging into one organized weekly ledger. Hand-screen-printed editorial illustration with tactile uncoated parchment, embossed contour lines, graphite details and restrained mineral ink. Soft overcast window light, orthographic framing, landscape 3:2. Place visual density to the right and preserve calm paper negative space to the left. Palette of parchment, deep pine, lichen gray-green, oxidized rust and muted ochre. No people, bodies, brands, app interface, screens, readable text, numbers, logos, watermark, medals, trophies or neon gradient."
+}

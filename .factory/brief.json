@@ -1,0 +1,12 @@
+{
+  "slug": "training-log-merge",
+  "title": "Training Log Merge",
+  "territory": "utilities",
+  "user": "Recreational athletes mixing gym plans with running or wearable workouts who need one private weekly training view without forcing all activity into a single app.",
+  "current_workaround": "Switch among Strava, a strength app, a watch dashboard, spreadsheets, and chat-based accountability.",
+  "smallest_useful_product": "Offline importer for simple CSV/GPX workout exports plus manual strength sessions; display a weekly timeline and user-set session labels/load notes, with CSV export.",
+  "non_goals": ["coaching", "leaderboards", "heart-rate interpretation", "live device sync", "social network"],
+  "artifact_class": "pwa-offline",
+  "monetization": "one-time",
+  "constraints": ["No performance or health claims", "Local-only processing", "Respect export formats and trademarks", "Clear time-zone handling"]
+}
