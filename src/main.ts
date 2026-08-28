@@ -150,10 +150,11 @@ function initialTemplate(): string {
         <input type="hidden" name="id"><input type="hidden" name="type" value="strength">
         <div class="form-grid">
           <label class="span-2">Session label<input name="title" required maxlength="80" autocomplete="off"></label>
-          <label>Date<input name="date" type="date" required></label><label>Start time<input name="time" type="time" required></label>
+          <label>Date<input name="date" type="date" required aria-describedby="workoutDateTimeError"></label><label>Start time<input name="time" type="time" required aria-describedby="workoutDateTimeError"></label>
           <label>Duration (minutes)<input name="duration" type="number" min="1" max="1440" required inputmode="decimal"></label>
           <label>Session load <span class="optional">optional</span><input name="load" type="number" min="0" max="10000" inputmode="decimal" aria-describedby="loadHint"></label>
           <p class="form-hint span-2" id="loadHint">Use your own consistent scale. We don’t interpret it.</p>
+          <p class="form-error span-2" id="workoutDateTimeError" role="alert" hidden></p>
           <label class="span-2">Notes <span class="optional">optional</span><textarea name="notes" rows="3" maxlength="500"></textarea></label>
         </div>
         <div class="dialog-actions"><button class="button danger hidden" id="deleteWorkout" type="button">Delete session</button><span class="action-spacer"></span><button class="button quiet" type="button" data-close="workoutDialog">Cancel</button><button class="button primary" type="submit">Save session</button></div>
@@ -259,6 +260,32 @@ function openDialog(id: string): void {
 }
 function closeDialog(id: string): void { document.querySelector<HTMLDialogElement>(`#${id}`)!.close(); }
 
+function clearWorkoutDateTimeError(): void {
+  const form = document.querySelector<HTMLFormElement>('#workoutForm')!;
+  const error = document.querySelector<HTMLParagraphElement>('#workoutDateTimeError')!;
+  error.hidden = true;
+  error.textContent = '';
+  ['date', 'time'].forEach((name) => {
+    const input = form.elements.namedItem(name) as HTMLInputElement;
+    input.setCustomValidity('');
+    input.removeAttribute('aria-invalid');
+  });
+}
+
+function showWorkoutDateTimeError(): void {
+  const form = document.querySelector<HTMLFormElement>('#workoutForm')!;
+  const error = document.querySelector<HTMLParagraphElement>('#workoutDateTimeError')!;
+  const message = `This local time does not exist in ${timezone}. Choose another start time.`;
+  error.textContent = message;
+  error.hidden = false;
+  ['date', 'time'].forEach((name) => {
+    const input = form.elements.namedItem(name) as HTMLInputElement;
+    input.setCustomValidity(message);
+    input.setAttribute('aria-invalid', 'true');
+  });
+  (form.elements.namedItem('time') as HTMLInputElement).focus();
+}
+
 function openImport(): void {
   preview = []; importErrors = []; renderImportPreview();
   (document.querySelector<HTMLInputElement>('#workoutFiles')!).value = '';
@@ -268,6 +295,7 @@ function openImport(): void {
 function openManual(): void {
   const form = document.querySelector<HTMLFormElement>('#workoutForm')!;
   form.reset();
+  clearWorkoutDateTimeError();
   const now = new Date();
   (form.elements.namedItem('id') as HTMLInputElement).value = '';
   (form.elements.namedItem('type') as HTMLInputElement).value = 'strength';
@@ -284,6 +312,7 @@ function openEdit(id: string): void {
   const workout = workouts.find((item) => item.id === id);
   if (!workout) return;
   const form = document.querySelector<HTMLFormElement>('#workoutForm')!;
+  clearWorkoutDateTimeError();
   (form.elements.namedItem('id') as HTMLInputElement).value = workout.id;
   (form.elements.namedItem('type') as HTMLInputElement).value = workout.type;
   (form.elements.namedItem('title') as HTMLInputElement).value = workout.title;
@@ -382,7 +411,13 @@ function bindEvents(): void {
     const values = new FormData(form);
     const id = String(values.get('id') || crypto.randomUUID());
     const existing = workouts.find((w) => w.id === id);
-    const startedAt = localWallTimeToUtc(`${values.get('date')}T${values.get('time')}`, timezone);
+    let startedAt: string;
+    try {
+      startedAt = localWallTimeToUtc(`${values.get('date')}T${values.get('time')}`, timezone);
+    } catch {
+      showWorkoutDateTimeError();
+      return;
+    }
     const workout: Workout = {
       id, startedAt, timezone, title: String(values.get('title')), type: String(values.get('type')) as WorkoutType,
       durationMinutes: Number(values.get('duration')), load: values.get('load') ? Number(values.get('load')) : undefined,
@@ -392,6 +427,8 @@ function bindEvents(): void {
     workout.fingerprint = makeFingerprint(workout);
     await saveWorkouts([workout]); workouts = await getWorkouts(); closeDialog('workoutDialog'); weekStart = startOfWeek(new Date(workout.startedAt), timezone); renderLedger(); showToast(existing ? 'Session updated.' : 'Strength session added.');
   });
+  ['date', 'time'].forEach((name) => (document.querySelector<HTMLFormElement>('#workoutForm')!.elements.namedItem(name) as HTMLInputElement)
+    .addEventListener('input', clearWorkoutDateTimeError));
   document.querySelector('#deleteWorkout')!.addEventListener('click', async () => {
     const id = (document.querySelector<HTMLFormElement>('#workoutForm')!.elements.namedItem('id') as HTMLInputElement).value;
     const workout = workouts.find((w) => w.id === id);

@@ -147,6 +147,7 @@ dialog[open] { animation: dialog-in 220ms ease-out; }
 .drop-field input { position: absolute; opacity: 0; pointer-events: none; }
 .drop-field:has(input:focus-visible) { outline: 3px solid var(--focus); outline-offset: 3px; }
 .error-box { margin: 12px 0; padding: 14px 16px; background: #f9e7e1; border-left: 4px solid var(--danger); }
+.form-error { margin: 0; padding: 10px 12px; border-left: 4px solid var(--danger); background: #f9e7e1; color: #6f211b; font-weight: 700; }
 .loading-note { padding: 14px; color: var(--muted); font: 13px ui-monospace, monospace; }
 .error-box ul { margin: 6px 0 0; padding-left: 20px; }
 .preview-summary { display: flex; justify-content: space-between; gap: 12px; padding: 12px 0; border-bottom: 2px solid var(--ink); }

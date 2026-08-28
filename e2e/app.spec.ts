@@ -83,6 +83,38 @@ test('shows impossible CSV dates as errors and never enables import', async ({ p
   await expect(page.getByText('Impossible', { exact: true })).not.toBeVisible();
 });
 
+test('keeps a manual DST-gap time recoverable without a page error', async ({ page }) => {
+  const pageErrors: Error[] = [];
+  page.on('pageerror', (error) => pageErrors.push(error));
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Settings' }).click();
+  await page.getByLabel('Review time zone').fill('America/New_York');
+  await page.getByRole('button', { name: 'Save settings' }).click();
+
+  await page.getByRole('button', { name: 'Add strength' }).first().click();
+  const date = page.getByLabel('Date');
+  const time = page.getByLabel('Start time');
+  await page.getByLabel('Session label').fill('DST recovery session');
+  await date.fill('2026-03-08');
+  await time.fill('02:30');
+  await page.getByLabel('Duration (minutes)').fill('30');
+  await page.getByRole('button', { name: 'Save session' }).click();
+
+  await expect(page.getByRole('alert')).toHaveText('This local time does not exist in America/New_York. Choose another start time.');
+  await expect(date).toHaveAttribute('aria-describedby', 'workoutDateTimeError');
+  await expect(time).toHaveAttribute('aria-invalid', 'true');
+  await expect(date).toHaveValue('2026-03-08');
+  await expect(time).toHaveValue('02:30');
+  await expect(page.getByRole('dialog', { name: 'Add strength session' })).toBeVisible();
+  expect(pageErrors).toEqual([]);
+
+  await time.fill('03:30');
+  await expect(page.getByRole('alert')).toBeHidden();
+  await page.getByRole('button', { name: 'Save session' }).click();
+  await expect(page.getByText('DST recovery session', { exact: true })).toBeVisible();
+  expect(pageErrors).toEqual([]);
+});
+
 test('mobile primary path remains usable at 390 CSS pixels', async ({ browser }) => {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
   const page = await context.newPage();
