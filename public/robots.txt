@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://training-log-merge.sociobot.in/sitemap.xml

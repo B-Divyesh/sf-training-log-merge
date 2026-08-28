@@ -1,6 +1,8 @@
 node_modules/
 dist/
-.env
-*.log
+playwright-report/
+test-results/
+artifacts-*.png
 graphify-out/
+*.log
 .DS_Store
