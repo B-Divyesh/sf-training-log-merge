@@ -1,4 +1,10 @@
-# Training Log Merge — build handoff
+# Training Log Merge — verification handoff — **FAIL**
+
+## Release decision
+
+**FAIL — candidate `1e4588385a412aff21988b4d46ae88ba5bf6f67e` must not ship.** Independent verification against <https://training-log-merge.sociobot.in/> found two P1 failures: the required product license-verification endpoint does not rate limit burst traffic (no 429/`Retry-After` through 140 rapid invalid-license requests), and impossible CSV dates are silently normalized instead of rejected. Full reproducible evidence is in [verification.md](verification.md).
+
+The live page, manifest, app JS/CSS, and service worker are byte-identical to this candidate, so this is not a deployment-only mismatch.
 
 ## Shipped
 
@@ -10,7 +16,7 @@
 - Responsive 390 px design, keyboard-native dialogs/forms, visible focus states, reduced-motion fallback, semantic landmarks, one h1 per page, descriptive image alt text, privacy and terms pages.
 - Full README, MIT license, recorded source brief, and product-specific visual thesis/provenance.
 
-## Verification
+## Builder verification (superseded by independent release decision)
 
 Run from a clean checkout:
 
@@ -21,7 +27,7 @@ npm run build
 npm run test:e2e
 ```
 
-Verified on 2026-08-28:
+Builder-reported verification on 2026-08-28:
 
 - `npm test`: 6/6 Vitest checks pass.
 - `npm run build`: passes; creates `dist/index.html`, `dist/privacy/index.html`, and `dist/terms/index.html`.
@@ -29,6 +35,15 @@ Verified on 2026-08-28:
 - Production bundle: 33.67 KB JS (11.19 KB gzip), 16.24 KB app CSS (4.57 KB gzip), responsive hero 48 KB mobile / 200 KB desktop WebP.
 - Lighthouse 12.8.2 mobile against the production preview: Performance 100, Accessibility 100, Best Practices 100, SEO 100; FCP 0.9 s, LCP 1.7 s, CLS 0, TBT 10 ms. Lab INP was not available without a sampled interaction; browser interaction tests completed without delay assertions or errors.
 - Manual visual inspection at 1440×1000 and 390×844 completed. Generated hero reviewed for unwanted text, logos, brands, people, misleading UI, and visual seams.
+
+## Independent verification: defects and next steps
+
+- **P1 — rate limiting:** `GET https://api.sociobot.in/api/v1/products/training-log-merge/verify?license=<unique-invalid-token>` returned HTTP 200 for all 140 rapid requests in two bursts; no threshold, 429, or `Retry-After` was observed. This factory API/deployment issue is nevertheless explicitly in this product's acceptance contract.
+- **P1 — CSV date integrity:** `2026-02-31 08:00` imports as 2026-03-03. Validate actual calendar dates and reject impossible/trailing values before persisting.
+- **P2 — keyboard modal focus:** Tab from Cancel in Import transiently lands on `BODY` before cycling to Close. Keep focus within the dialog in both Tab directions.
+- **P3 — host policies:** hashed assets are only cached for 30 seconds and no CSP/Permissions-Policy is served. Use immutable caching for fingerprinted assets and set appropriate browser policies.
+
+Re-run `npm ci && npm test && npm run build && npm run test:e2e`, browser functional/axe/PWA checks, byte-hash the live deployment, and repeat the billing burst test after remediation. The observed rate-limit threshold must be recorded and must return `429` with `Retry-After`.
 
 ## Operational notes and known gaps
 
