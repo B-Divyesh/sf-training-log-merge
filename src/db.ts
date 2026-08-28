@@ -2,6 +2,30 @@ import type { Workout } from './types';
 
 const DB_NAME = 'training-log-merge';
 const STORE = 'workouts';
+const DEMO_KEY = 'demo:training-log-merge:workouts';
+let demoMode = false;
+
+export function useDemoStorage(enabled: boolean): void {
+  demoMode = enabled;
+}
+
+function demoWorkouts(): Workout[] {
+  try {
+    const value = JSON.parse(sessionStorage.getItem(DEMO_KEY) ?? '[]') as unknown;
+    return Array.isArray(value) ? value as Workout[] : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveDemoWorkouts(workouts: Workout[]): void {
+  sessionStorage.setItem(DEMO_KEY, JSON.stringify(workouts));
+}
+
+export function resetDemoStorage(): void {
+  sessionStorage.removeItem(DEMO_KEY);
+  sessionStorage.removeItem('demo:training-log-merge:timezone');
+}
 
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -27,6 +51,7 @@ function requestResult<T>(request: IDBRequest<T>): Promise<T> {
 }
 
 export async function getWorkouts(): Promise<Workout[]> {
+  if (demoMode) return demoWorkouts().sort((a, b) => a.startedAt.localeCompare(b.startedAt));
   const db = await openDb();
   const result = await requestResult(db.transaction(STORE).objectStore(STORE).getAll()) as Workout[];
   db.close();
@@ -35,6 +60,13 @@ export async function getWorkouts(): Promise<Workout[]> {
 
 export async function saveWorkouts(workouts: Workout[]): Promise<void> {
   if (!workouts.length) return;
+  if (demoMode) {
+    const existing = demoWorkouts();
+    const merged = new Map(existing.map((workout) => [workout.id, workout]));
+    workouts.forEach((workout) => merged.set(workout.id, workout));
+    saveDemoWorkouts([...merged.values()]);
+    return;
+  }
   const db = await openDb();
   await new Promise<void>((resolve, reject) => {
     const transaction = db.transaction(STORE, 'readwrite');
@@ -47,12 +79,20 @@ export async function saveWorkouts(workouts: Workout[]): Promise<void> {
 }
 
 export async function deleteWorkout(id: string): Promise<void> {
+  if (demoMode) {
+    saveDemoWorkouts(demoWorkouts().filter((workout) => workout.id !== id));
+    return;
+  }
   const db = await openDb();
   await requestResult(db.transaction(STORE, 'readwrite').objectStore(STORE).delete(id));
   db.close();
 }
 
 export async function replaceAllWorkouts(workouts: Workout[]): Promise<void> {
+  if (demoMode) {
+    saveDemoWorkouts(workouts);
+    return;
+  }
   const db = await openDb();
   await new Promise<void>((resolve, reject) => {
     const transaction = db.transaction(STORE, 'readwrite');

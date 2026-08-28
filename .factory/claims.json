@@ -1,0 +1,65 @@
+[
+  {
+    "id": "demo-sandbox",
+    "claim": "Try five sample sessions without changing the real ledger.",
+    "where": "home primary action, demo banner, README",
+    "test": "npm run test:e2e -- --grep @claim:demo-sandbox",
+    "sandbox": "fresh browser context; create one real session; enter /demo/; reset; return and assert the real session remains"
+  },
+  {
+    "id": "local-privacy",
+    "claim": "Workout data stays in this browser and no workout data is sent elsewhere.",
+    "where": "home facts, boundaries, privacy page, README",
+    "test": "npm run test:e2e -- --grep @claim:local-privacy",
+    "sandbox": "fresh /demo/ context; add a session; assert same-origin traffic, demo-prefixed session storage, and no real IndexedDB"
+  },
+  {
+    "id": "csv-gpx-merge",
+    "claim": "Import CSV and timestamped GPX files, preserve source names, and skip likely duplicates.",
+    "where": "how-it-works section, importer, README",
+    "test": "npm run test:e2e -- --grep @claim:csv-gpx-merge",
+    "sandbox": "fresh /demo/ context; import two equivalent CSV rows and one GPX track; assert two additions, one skip, and source display"
+  },
+  {
+    "id": "manual-log",
+    "claim": "Add and edit manual strength sessions.",
+    "where": "ledger actions, how-it-works section, README",
+    "test": "npm run test:e2e -- --grep @claim:manual-log",
+    "sandbox": "fresh /demo/ context; add a strength session, edit notes, reload, and assert the edit remains in the demo tab"
+  },
+  {
+    "id": "csv-export",
+    "claim": "Export every session and its source fields as CSV for free.",
+    "where": "ledger toolbar, paid section, README",
+    "test": "npm run test:e2e -- --grep @claim:csv-export",
+    "sandbox": "fresh /demo/ context; download CSV and assert its header, five records, and source values"
+  },
+  {
+    "id": "import-file-limit",
+    "claim": "Each imported file can be up to 10 MB.",
+    "where": "import dialog, README",
+    "test": "npm run test:e2e -- --grep @claim:import-file-limit",
+    "sandbox": "fresh /demo/ context; select a 10,000,001-byte file and assert the actionable rejection and disabled import"
+  },
+  {
+    "id": "timezone-import",
+    "claim": "Dates without an offset use the selected IANA time zone.",
+    "where": "settings, import dialog, README",
+    "test": "npm run test:e2e -- --grep @claim:timezone-import",
+    "sandbox": "fresh /demo/ context; select America/New_York, import 07:30 local, export, and assert 11:30Z"
+  },
+  {
+    "id": "offline-reload",
+    "claim": "The training ledger works offline after the first visit.",
+    "where": "home facts, privacy page, README",
+    "test": "npm run test:e2e -- --grep @claim:offline-reload",
+    "sandbox": "fresh /demo/ context; wait for service-worker control, set the browser offline, reload, and assert all five sessions"
+  },
+  {
+    "id": "json-backup-restore",
+    "claim": "The $19 one-time Field Kit backs up and restores the complete ledger as JSON.",
+    "where": "paid section, Field Kit dialog, terms, README",
+    "test": "npm run test:e2e -- --grep @claim:json-backup-restore",
+    "sandbox": "fresh /demo/ context with the Field Kit preview; download five records, delete one, restore the file, and assert five records"
+  }
+]

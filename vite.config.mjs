@@ -9,8 +9,8 @@ function serviceWorkerManifest() {
     name: 'service-worker-manifest',
     async closeBundle() {
       const dist = resolve(root, 'dist');
-      const pages = ['index.html', 'privacy/index.html', 'terms/index.html'];
-      const urls = new Set(['/', '/offline.html', '/offline.css', '/manifest.webmanifest', '/icon-192.png', '/icon-512.png']);
+      const pages = ['index.html', 'demo/index.html', 'privacy/index.html', 'terms/index.html', '404.html'];
+      const urls = new Set(['/', '/demo/', '/privacy/', '/terms/', '/offline.html', '/offline.css', '/manifest.webmanifest', '/icon-192.png', '/icon-512.png']);
       for (const page of pages) {
         const html = await readFile(resolve(dist, page), 'utf8');
         urls.add(`/${page}`);
@@ -33,8 +33,10 @@ export default defineConfig({
     rollupOptions: {
       input: {
         app: resolve(root, 'index.html'),
+        demo: resolve(root, 'demo/index.html'),
         privacy: resolve(root, 'privacy/index.html'),
-        terms: resolve(root, 'terms/index.html')
+        terms: resolve(root, 'terms/index.html'),
+        notFound: resolve(root, '404.html')
       }
     }
   },

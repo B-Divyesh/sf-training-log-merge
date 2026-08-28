@@ -26,4 +26,24 @@ describe('production response policy', () => {
     const workerPolicy = config.routes.find(({ route }) => route === '/sw.js');
     expect(workerPolicy?.headers?.['Cache-Control']).toBe('no-cache, no-store, must-revalidate');
   });
+
+  it('publishes demo, social metadata, and a real 404 response policy', () => {
+    const home = readFileSync('index.html', 'utf8');
+    expect(home).toContain('rel="canonical"');
+    expect(home).toContain('property="og:image"');
+    expect(home).toContain('rel="apple-touch-icon"');
+    expect(readFileSync('demo/index.html', 'utf8')).toContain('<title>Demo — Training Log Merge</title>');
+    expect(readFileSync('404.html', 'utf8')).toContain('This trail ends here.');
+    expect((config as StaticWebAppConfig & { responseOverrides?: Record<string, { statusCode?: number }> }).responseOverrides?.['404']?.statusCode).toBe(404);
+  });
+
+  it('registers every claim with exactly one tagged browser test', () => {
+    const claims = JSON.parse(readFileSync('.factory/claims.json', 'utf8')) as Array<{ id: string; test: string }>;
+    const browserTests = readFileSync('e2e/claims.spec.ts', 'utf8');
+    expect(claims.length).toBeGreaterThan(0);
+    for (const claim of claims) {
+      expect(claim.test).toBe(`npm run test:e2e -- --grep @claim:${claim.id}`);
+      expect(browserTests.match(new RegExp(`@claim:${claim.id}`, 'g'))).toHaveLength(1);
+    }
+  });
 });

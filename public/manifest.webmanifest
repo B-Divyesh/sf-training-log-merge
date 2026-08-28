@@ -3,7 +3,7 @@
   "short_name": "Log Merge",
   "description": "A private, local weekly ledger for workout exports.",
   "id": "/?source=pwa",
-  "start_url": "/?v=1",
+  "start_url": "/?v=2",
   "display": "standalone",
   "background_color": "#f4f0e6",
   "theme_color": "#f4f0e6",

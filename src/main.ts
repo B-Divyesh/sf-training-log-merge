@@ -1,11 +1,18 @@
 import './styles.css';
-import { deleteWorkout, getWorkouts, replaceAllWorkouts, saveWorkouts } from './db';
+import { deleteWorkout, getWorkouts, replaceAllWorkouts, resetDemoStorage, saveWorkouts, useDemoStorage } from './db';
 import { localWallTimeToUtc, makeFingerprint, parseFiles, toCsv } from './parsers';
 import { cachedUnlocked, captureLicenseFromUrl, checkoutUrl, licenseToken, storeLicense, verifyLicense } from './license';
 import type { ImportCandidate, Workout, WorkoutType } from './types';
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
 if (!app) throw new Error('App root missing');
+const currentUrl = new URL(location.href);
+const demoMode = currentUrl.pathname === '/demo' || currentUrl.pathname === '/demo/' || currentUrl.searchParams.get('demo') === '1';
+const appRoutes = ['/', '/index.html', '/demo', '/demo/'];
+const unknownRoute = !appRoutes.includes(currentUrl.pathname);
+const timezoneStorage = demoMode ? sessionStorage : localStorage;
+const timezoneKey = demoMode ? 'demo:training-log-merge:timezone' : 'tlm:timezone';
+useDemoStorage(demoMode);
 
 const icons: Record<string, string> = {
   import: '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3v12m0 0 4-4m-4 4-4-4M4 16v4h16v-4"/></svg>',
@@ -19,11 +26,11 @@ const icons: Record<string, string> = {
 let workouts: Workout[] = [];
 let preview: ImportCandidate[] = [];
 let importErrors: string[] = [];
-let timezone = localStorage.getItem('tlm:timezone') || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+let timezone = timezoneStorage.getItem(timezoneKey) || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
 let weekStart = startOfWeek(new Date(), timezone);
 let typeFilter = 'all';
 let sourceFilter = 'all';
-let unlocked = cachedUnlocked();
+let unlocked = demoMode ? true : cachedUnlocked();
 let deletedForUndo: Workout | null = null;
 let undoTimer = 0;
 
@@ -77,17 +84,39 @@ function typeLabel(type: WorkoutType): string {
   return ({ run: 'Run', ride: 'Ride', strength: 'Strength', walk: 'Walk', mobility: 'Mobility', other: 'Other' })[type];
 }
 
+function sampleWorkouts(): Workout[] {
+  const samples: Array<[number, string, WorkoutType, number, number | undefined, number | undefined, string, string]> = [
+    [0, 'Canal recovery run', 'run', 34, 5.4, undefined, 'Watch export', 'Easy pace after Sunday’s long run.'],
+    [1, 'Lower-body strength', 'strength', 52, undefined, 310, 'Manual', 'Squat, hinge, and calf work.'],
+    [2, 'Lunch walk', 'walk', 28, 2.2, undefined, 'Phone export', 'Clear weather.'],
+    [4, 'Park intervals', 'run', 46, 7.1, undefined, 'Running app', 'Six steady repeats with full recoveries.'],
+    [5, 'Mobility reset', 'mobility', 20, undefined, 35, 'Manual', 'Hips and ankles.']
+  ];
+  return samples.map(([day, title, type, durationMinutes, distanceKm, load, source, notes], index) => {
+    const startedAt = localWallTimeToUtc(`${moveDateKey(weekStart, day)} ${index % 2 ? '18:15' : '07:10'}`, timezone);
+    const workout: Workout = {
+      id: `demo-session-${index + 1}`, startedAt, timezone, title, type, durationMinutes, distanceKm, load, notes, source,
+      sourceId: source === 'Manual' ? undefined : `sample-${index + 1}`,
+      sourceUrl: undefined, importedAt: startedAt, fingerprint: ''
+    };
+    workout.fingerprint = makeFingerprint(workout);
+    return workout;
+  });
+}
+
 function initialTemplate(): string {
   return `
     <header class="site-header">
       <a class="brand" href="/" aria-label="Training Log Merge home"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span><span>Training Log<br><b>Merge</b></span></a>
       <nav aria-label="Utility navigation">
         <span class="status-chip" id="networkStatus"><span></span>Local only</span>
+        <a class="text-button demo-link" href="/demo/">Demo</a>
         <button class="text-button" id="settingsButton" type="button">Settings</button>
         <button class="text-button field-kit" id="unlockButton" type="button" aria-label="Open field kit">${icons.lock}<span>Field kit</span></button>
       </nav>
     </header>
-    <main id="main">
+    ${demoMode ? `<aside class="demo-banner" aria-label="Demo mode"><strong>Demo — sample data, nothing is saved</strong><span>Changes stay in this tab and never touch your real ledger.</span><div><button type="button" id="resetDemo">Reset demo</button><a href="/" id="startReal">Start for real</a></div></aside>` : ''}
+    <main id="main" tabindex="-1">
       <section class="hero" aria-labelledby="pageTitle">
         <picture class="hero-art">
           <source type="image/webp" srcset="/assets/trail-ledger-768.01a67cdf.webp 768w, /assets/trail-ledger-1536.be14f7f2.webp 1536w" sizes="(max-width: 700px) 100vw, 1180px">
@@ -95,13 +124,15 @@ function initialTemplate(): string {
         </picture>
         <div class="hero-copy">
           <p class="eyebrow">Private weekly field log · ${html(timezone)}</p>
-          <h1 id="pageTitle">Your training week,<br><em>on one map.</em></h1>
-          <p>Bring CSV and GPX exports together with strength sessions. Review the week without sending it anywhere.</p>
+          <h1 id="pageTitle">Merge workouts into one <em>private weekly log.</em></h1>
+          <p>For recreational athletes whose runs, gym sessions, and wearable exports live in different apps.</p>
           <div class="hero-actions">
-            <button class="button primary" id="importButton" type="button">${icons.import}<span>Import workouts</span></button>
-            <button class="button secondary" id="manualButton" type="button">${icons.plus}<span>Add strength</span></button>
+            ${demoMode
+              ? `<button class="button primary" id="importButton" type="button">${icons.import}<span>Import workouts</span></button><button class="button secondary" id="manualButton" type="button">${icons.plus}<span>Add strength</span></button>`
+              : `<a class="button primary" id="demoButton" href="/demo/">Try it with sample data</a><button class="button secondary" id="importButton" type="button">${icons.import}<span>Import your files</span></button><button class="button quiet" id="manualButton" type="button">${icons.plus}<span>Add strength</span></button>`}
           </div>
-          <p class="privacy-note"><span aria-hidden="true">●</span> Processed and stored on this device</p>
+          <p class="action-note">${demoMode ? 'Explore five sample sessions or change anything in this separate demo.' : 'The demo opens a separate sample ledger. No setup is needed.'}</p>
+          <ul class="plain-facts" aria-label="Product facts"><li><strong>Private:</strong> workout data stays in this browser.</li><li><strong>Offline:</strong> works after your first visit.</li><li><strong>Price:</strong> core tools are free; Field Kit is $19 once.</li></ul>
         </div>
       </section>
 
@@ -127,12 +158,22 @@ function initialTemplate(): string {
         <div id="timeline" class="timeline"></div>
       </section>
 
+      <section class="how-it-works" aria-labelledby="howTitle">
+        <p class="kicker">Three trail marks</p><h2 id="howTitle">How it works</h2>
+        <ol><li><span>01</span><div><h3>Bring your exports</h3><p>Choose CSV or timestamped GPX files from your training apps.</p></div></li><li><span>02</span><div><h3>Check the merge</h3><p>Review dates and duplicates before anything enters your ledger.</p></div></li><li><span>03</span><div><h3>Review and export</h3><p>Add strength notes, scan any week, and export all sessions as CSV.</p></div></li></ol>
+      </section>
+
+      <section class="boundaries" aria-labelledby="boundariesTitle">
+        <div><p class="kicker">Your records stay yours</p><h2 id="boundariesTitle">A ledger, not a coach</h2></div>
+        <p>Training Log Merge has no accounts, analytics, cloud workout storage, rankings, or health advice. Your browser stores the ledger. You choose when to export it.</p>
+      </section>
+
       <section class="fieldkit-strip" aria-labelledby="fieldkitTitle">
         <div><p class="kicker">Optional paid field kit</p><h2 id="fieldkitTitle">Keep the core free. Back up the whole map.</h2><p>JSON backup and restore for <strong>$19 once</strong>. Imports, edits, weekly review, and CSV export stay free.</p></div>
         <button class="button secondary" id="fieldkitStripButton" type="button">${icons.lock}<span>${unlocked ? 'Open field kit' : 'See the field kit'}</span></button>
       </section>
     </main>
-    <footer><div><span class="footer-mark">TLM / 26</span><p>A source-neutral training ledger. No coaching, rankings, health claims, accounts, analytics, or cloud sync.</p></div><nav aria-label="Legal"><a href="/privacy/">Privacy</a><a href="/terms/">Terms</a><span>AI-generated map artwork</span></nav></footer>
+    <footer><div><span class="footer-mark">TLM / 26</span><p>A private weekly ledger for workout exports and strength notes.</p></div><nav aria-label="Legal"><a href="/privacy/">Privacy</a><a href="/terms/">Terms</a><span>Built by Param Factory</span><span>Build repair-3 · AI-generated map artwork</span></nav></footer>
 
     <dialog id="importDialog" aria-labelledby="importTitle">
       <form method="dialog" class="dialog-shell" id="importForm">
@@ -173,7 +214,7 @@ function initialTemplate(): string {
       <ul class="feature-list"><li><span>01</span>Versioned JSON backup of every session</li><li><span>02</span>Restore or move your ledger between devices</li><li><span>03</span>Support a private, source-neutral utility</li></ul>
       <p>Pay <strong>$19 once</strong>. Sociobot/Dodo is the merchant of record and handles refunds; a refunded license is revoked. No subscription.</p>
       <div class="paid-actions" id="paidActions"></div>
-      <hr><form id="licenseForm"><label>Have a license?<input name="license" value="${html(licenseToken())}" autocomplete="off" spellcheck="false" placeholder="Paste license token"></label><button class="button quiet" type="submit">Verify license</button></form>
+      <hr><form id="licenseForm"><label>Have a license?<input name="license" value="${html(demoMode ? '' : licenseToken())}" autocomplete="off" spellcheck="false" placeholder="Paste license token"></label><button class="button quiet" type="submit">Verify license</button></form>
       <p class="legal-small">Purchase and verification contact the Sociobot billing service. See <a href="/privacy/">privacy</a> and <a href="/terms/">terms</a>.</p>
     </div></dialog>
     <label class="visually-hidden" for="restoreJson">Choose a Training Log Merge JSON backup</label><input class="visually-hidden" id="restoreJson" type="file" accept="application/json,.json">
@@ -353,14 +394,32 @@ function renderLicenseState(message = ''): void {
   document.querySelector('#restoreButton')?.addEventListener('click', () => document.querySelector<HTMLInputElement>('#restoreJson')!.click());
 }
 
+function renderNotFound(): void {
+  document.title = 'Page not found — Training Log Merge';
+  app.innerHTML = `<header class="site-header"><a class="brand" href="/" aria-label="Training Log Merge home"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span><span>Training Log<br><b>Merge</b></span></a></header><main class="not-found" id="main" tabindex="-1"><p class="kicker">Map edge · 404</p><h1 id="pageTitle">This trail ends here.</h1><p>The page you asked for is not part of this training log.</p><a class="button primary" href="/">Return to your ledger</a></main><footer><div><span class="footer-mark">TLM / 26</span><p>A private weekly ledger for workout exports and strength notes.</p></div><nav aria-label="Legal"><a href="/privacy/">Privacy</a><a href="/terms/">Terms</a><span>Build repair-3</span></nav></footer>`;
+  document.querySelector<HTMLElement>('#main')?.focus();
+  document.querySelector<HTMLAnchorElement>('.skip-link')?.addEventListener('click', () => requestAnimationFrame(() => document.querySelector<HTMLElement>('#main')?.focus()));
+}
+
 async function init(): Promise<void> {
-  const captured = captureLicenseFromUrl();
+  if (unknownRoute) {
+    renderNotFound();
+    return;
+  }
+  document.title = demoMode ? 'Demo — Training Log Merge' : 'Training Log Merge — Merge workout logs privately';
+  const captured = demoMode ? false : captureLicenseFromUrl();
   if (captured) unlocked = true;
   app.innerHTML = initialTemplate();
-  try { workouts = await getWorkouts(); }
+  try {
+    workouts = await getWorkouts();
+    if (demoMode && !workouts.length) {
+      await saveWorkouts(sampleWorkouts());
+      workouts = await getWorkouts();
+    }
+  }
   catch (error) { showToast(error instanceof Error ? error.message : 'Could not open your local ledger.'); }
   bindEvents(); renderLedger(); renderLicenseState(captured ? 'License received. Verifying quietly…' : '');
-  verifyLicense().then((result) => {
+  if (!demoMode) verifyLicense().then((result) => {
     unlocked = result.valid;
     renderLicenseState(result.reason && !['ok', 'missing', 'offline'].includes(result.reason) ? 'License no longer active. You can keep using every free feature.' : '');
   });
@@ -371,6 +430,7 @@ async function init(): Promise<void> {
 }
 
 function bindEvents(): void {
+  document.querySelector<HTMLAnchorElement>('.skip-link')?.addEventListener('click', () => requestAnimationFrame(() => document.querySelector<HTMLElement>('#main')?.focus()));
   document.querySelectorAll<HTMLDialogElement>('dialog').forEach((dialog) => {
     dialog.addEventListener('keydown', keepFocusInDialog);
     dialog.addEventListener('close', () => {
@@ -380,7 +440,16 @@ function bindEvents(): void {
     });
   });
   document.querySelector('#importButton')!.addEventListener('click', openImport);
-  document.querySelector('#manualButton')!.addEventListener('click', openManual);
+  document.querySelector('#manualButton')?.addEventListener('click', openManual);
+  document.querySelector('#resetDemo')?.addEventListener('click', async () => {
+    resetDemoStorage();
+    await saveWorkouts(sampleWorkouts());
+    workouts = await getWorkouts();
+    weekStart = startOfWeek(new Date(), timezone);
+    renderLedger();
+    showToast('Demo reset to five sample sessions.');
+  });
+  document.querySelector('#startReal')?.addEventListener('click', () => resetDemoStorage());
   document.querySelector('#settingsButton')!.addEventListener('click', () => openDialog('settingsDialog'));
   ['unlockButton', 'fieldkitStripButton'].forEach((id) => document.querySelector(`#${id}`)!.addEventListener('click', () => { renderLicenseState(); openDialog('unlockDialog'); }));
   document.querySelectorAll<HTMLElement>('[data-close]').forEach((button) => button.addEventListener('click', () => closeDialog(button.dataset.close!)));
@@ -442,12 +511,13 @@ function bindEvents(): void {
     event.preventDefault(); const form = event.currentTarget as HTMLFormElement; const value = String(new FormData(form).get('timezone')).trim();
     try { new Intl.DateTimeFormat('en', { timeZone: value }).format(); }
     catch { (form.elements.namedItem('timezone') as HTMLInputElement).setCustomValidity('Enter a valid IANA time zone.'); form.reportValidity(); return; }
-    timezone = value; localStorage.setItem('tlm:timezone', timezone); weekStart = startOfWeek(new Date(), timezone); closeDialog('settingsDialog');
+    timezone = value; timezoneStorage.setItem(timezoneKey, timezone); weekStart = startOfWeek(new Date(), timezone); closeDialog('settingsDialog');
     document.querySelector('#zoneLabel')!.textContent = timezone; renderLedger(); showToast(`Week boundaries now use ${timezone}. Reload to update the import explanation.`);
   });
   document.querySelector<HTMLInputElement>('#settingsForm input')!.addEventListener('input', (event) => (event.target as HTMLInputElement).setCustomValidity(''));
   document.querySelector<HTMLFormElement>('#licenseForm')!.addEventListener('submit', async (event) => {
     event.preventDefault(); const token = String(new FormData(event.currentTarget as HTMLFormElement).get('license') ?? '').trim();
+    if (demoMode) { renderLicenseState('Start for real before adding a license.'); return; }
     if (!token) { renderLicenseState('Paste your license token first.'); return; }
     storeLicense(token); renderLicenseState('Verifying license…'); const result = await verifyLicense(true); unlocked = result.valid;
     renderLicenseState(result.valid ? 'License verified. Your field kit is ready.' : result.reason === 'offline' ? 'Could not reach verification. Your free ledger remains available.' : 'That license could not be verified. Check the token and try again.');

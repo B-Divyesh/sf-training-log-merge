@@ -1,6 +1,7 @@
 {
   "slug": "training-log-merge",
   "title": "Training Log Merge",
+  "summary": "Merge CSV, GPX, and gym sessions into one private weekly training log.",
   "territory": "utilities",
   "user": "Recreational athletes mixing gym plans with running or wearable workouts who need one private weekly training view without forcing all activity into a single app.",
   "current_workaround": "Switch among Strava, a strength app, a watch dashboard, spreadsheets, and chat-based accountability.",

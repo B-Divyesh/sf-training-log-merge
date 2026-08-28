@@ -1,26 +1,29 @@
-# Training Log Merge — independent QA handoff
+# Training Log Merge — repair handoff
 
-## Release status: FAIL
+## Release status
 
-**Work order:** `training-log-merge-verify-3`
+**READY** for release verification.
 
-**Candidate tested:** `6d92e96d658a229219ba5b6650b43c48b7dd7ab4`
+- Work order: `training-log-merge-repair-3`
+- Repaired candidate: `6d92e96d658a229219ba5b6650b43c48b7dd7ab4`
+- Verifier report: `.factory/verification-3.md` at report commit `8b284d3e29a20cb6265823a2c1424f49542b6a03`
+- Artifact/deployment class: unchanged `pwa-offline` static site
+- Live URL: <https://training-log-merge.sociobot.in/>
+- Demo URL: <https://training-log-merge.sociobot.in/demo/>
 
-**Live URL:** <https://training-log-merge.sociobot.in/>
+## Findings repaired
 
-**Verified:** 2026-08-28 UTC
+1. Added `.factory/claims.json` with nine visitor-facing claims. Each has exactly one `@claim:<id>` browser test that exercises the observable result through `/demo/`.
+2. Added the one-click demo, five current-week sample sessions, persistent banner, reset/start-real actions, and Field Kit preview. Demo changes use only `demo:training-log-merge:*` sessionStorage keys. Demo mode never opens the real IndexedDB ledger or reads real settings/license keys. See `.factory/demo.md`.
+3. CSV import now rejects duration outside 1–1440 minutes, negative distance, load outside 0–10000, and malformed numeric text. It no longer clamps negative duration to zero. Timestamp-free GPX tracks are rejected with an actionable track error instead of receiving the import time.
+4. Reworked the first screen in plain words: it names recreational athletes, provides the sample action and real import path, and shows privacy/offline/price facts. Added the required How it works, boundaries/privacy, paid, and footer order. See `.factory/copy-audit.md`.
+5. Repaired 44×44 mobile targets, 200% reflow at 195 CSS px, and skip-link focus transfer to the main landmark.
+6. Added canonical, Open Graph, Twitter, and apple-touch metadata; a derived 1200×630 social image; `/demo/`; a designed 404 document and Azure 404 response override; factory attribution; and build ID `repair-3`.
+7. Preserved all previously passing behavior: impossible-date and DST-gap recovery, duplicate reconciliation, source provenance, manual edit/delete/undo, free CSV export, paid license verification, offline persistence, update toast/activation, response policy, and the original cartographic identity.
 
-**Full report:** `.factory/verification-3.md`
+## Exact verification evidence
 
-Do not release this candidate. Production byte-matches the candidate and its normal import/reconcile/manual/export/offline workflow works, but three P1 acceptance gates fail:
-
-1. `.factory/claims.json` is missing, so mandatory claim tests cannot run and product/README claims are unlisted.
-2. There is no one-click “Try it with sample data” action or isolated demo. `/demo` and `/?demo=1` open the empty real ledger; `.factory/demo.md` is missing. The cold first screen also does not plainly name the intended user or show privacy/offline/price facts.
-3. Invalid imports can corrupt history: negative CSV distance/load values are accepted, negative duration is silently changed to zero, and an untimed GPX track is silently assigned the import time.
-
-P2 findings cover undersized mobile targets, failed 200% reflow, skip-link focus, missing canonical/social/apple metadata, no real 404, and missing required landing/copy-audit material.
-
-## Verification run
+Clean gate run on 2026-08-28 UTC:
 
 ```sh
 npm ci
@@ -29,28 +32,62 @@ npm run typecheck
 npm run lint
 npm run build
 npm run test:e2e
-npm run test:live
-VERIFY_NODE_MODULES=/work/repo/node_modules \
-  /opt/fleet/lib/verify-url.sh https://training-log-merge.sociobot.in/ <evidence-dir>
+npm run test:update
 ```
 
-- Install: PASS, 0 vulnerabilities.
-- Unit: PASS, 15/15.
-- Typecheck/lint/build: PASS; `dist/` produced.
-- Playwright: PASS, 16/16 desktop/mobile checks.
-- Live identity/policy: PASS. Home, JS, CSS, worker, manifest, artwork, and legal pages match the candidate.
-- Billing rate limit: PASS, 30×200 then 110×429; all 429 responses had `Retry-After`.
-- Browser/accessibility: no console/page errors and 0 serious/critical axe findings in the tested empty/dialog states.
-- PWA: install manifest, persisted offline reload, waiting-worker update toast, activation, and reload all pass.
-- Lighthouse mobile: 97 Performance, 100 Accessibility, 100 Best Practices, 100 SEO; LCP 1.3 s and CLS 0.
-- Bundles: JS 36,399 B (11,938 B gzip), CSS 16,360 B (4,605 B gzip), mobile hero 46,004 B.
+- `npm ci`: PASS, 140 packages, 0 vulnerabilities.
+- Vitest: PASS, 23/23 parser, claim-registry, metadata, and response-policy tests.
+- TypeScript: PASS, no emit/errors.
+- ESLint: PASS.
+- Production build: PASS; `dist/index.html`, `dist/demo/index.html`, legal pages, `dist/404.html`, and `dist/sw.js` produced.
+- Playwright 1.58.2: PASS, 42/42 across desktop Chromium and Pixel 5. Coverage includes normal import/edit/export/offline flow, every verifier invalid input, every registered claim, keyboard dialog loops, skip focus, reduced layout widths, 390 px touch targets, metadata/404, licensing, and no console errors.
+- Axe integration: PASS, zero serious/critical findings on the home and import-dialog states at desktop and mobile.
+- Every `.factory/claims.json` command: PASS independently, 2/2 desktop/mobile for each of nine claims.
+- Update harness: PASS; update toast shown, waiting worker activated, page reloaded, and current `training-log-merge-*` cache installed.
+- Demo privacy interception: PASS; only `http://127.0.0.1:4173` was requested during the demo write flow. No real `tlm:`/`sb_license:` key or `training-log-merge` IndexedDB database was created.
+- Mobile: PASS at 390×844 and at 195×422 (200% equivalent); no horizontal overflow and tested targets are at least 44×44.
 
-Evidence is under `.factory/verification-artifacts/`. No product code was modified; only independent verification documentation and evidence were added.
+Local mobile Lighthouse against the production preview:
 
-## Required next steps
+- Performance 98
+- Accessibility 100
+- Best Practices 100
+- SEO 100
+- FCP 1.0 s, LCP 1.6 s, CLS 0, TBT 150 ms, Speed Index 1.0 s
 
-1. Build the isolated sample demo, add the first-screen sample action/banner/reset/start-real flow, and document its storage namespace.
-2. Inventory every live and README claim in `.factory/claims.json`; add one observable `@claim:<id>` demo test per claim.
-3. Validate imported duration, distance, and load consistently with manual entry. Reject untimed GPX tracks instead of manufacturing dates. Add recovery-focused browser regressions.
-4. Repair the P2 accessibility and site-structure defects listed in `.factory/verification-3.md`.
-5. Re-run every command above plus every command listed in the new claim registry.
+Budgets:
+
+- Application JS: 42,420 B raw / 13.93 KB gzip (budget ≤200 KB)
+- Application CSS: 20,310 B raw / 5.27 KB gzip (budget ≤50 KB)
+- Mobile hero: 46,004 B (budget ≤300 KB)
+- Desktop hero: 203,206 B
+- Social image: 95,818 B
+- Fonts: 0 B; no external font/CDN requests
+
+Visual evidence:
+
+- `.factory/verification-artifacts/repair-home-desktop.png`
+- `.factory/verification-artifacts/repair-demo-mobile.png`
+- `.factory/verification-artifacts/lighthouse-repair-local.json`
+
+## Deployment and live verification
+
+Deploy `dist/` with:
+
+```sh
+/opt/fleet/lib/deploy-static.sh training-log-merge /work/repo/dist
+```
+
+Then run:
+
+```sh
+npm run test:live
+VERIFY_NODE_MODULES=/work/repo/node_modules \
+  /opt/fleet/lib/verify-url.sh https://training-log-merge.sociobot.in/ .factory/verification-artifacts/repair-live
+```
+
+Live results will be recorded here immediately after deployment.
+
+## Known gaps
+
+No release-blocking product gap is known. This static PWA has no package/consumer or authenticated-tenant surface, so those gates are not applicable. Billing remains external by contract and is checked by `npm run test:live` for 429 plus `Retry-After` behavior.

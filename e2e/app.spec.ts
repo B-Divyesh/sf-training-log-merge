@@ -3,8 +3,8 @@ import AxeBuilder from '@axe-core/playwright';
 
 test('imports two sources, skips duplicates, adds strength, and survives offline', async ({ page, context }) => {
   await page.goto('/');
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText(/Your training week/);
-  await page.getByRole('button', { name: 'Import workouts' }).first().click();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(/Merge workouts/);
+  await page.getByRole('button', { name: 'Import your files' }).click();
   const date = new Date().toISOString().slice(0, 10);
   await page.locator('#workoutFiles').setInputFiles([
     { name: 'watch.csv', mimeType: 'text/csv', buffer: Buffer.from(`date,type,title,duration,distance,source\n${date} 07:00,Run,River loop,42,7.2,Watch`) },
@@ -42,14 +42,14 @@ test('has no serious accessibility violations in empty and dialog states', async
   await page.goto('/');
   let results = await new AxeBuilder({ page }).analyze();
   expect(results.violations.filter((item) => ['serious', 'critical'].includes(item.impact ?? ''))).toEqual([]);
-  await page.getByRole('button', { name: 'Import workouts' }).first().click();
+  await page.getByRole('button', { name: 'Import your files' }).click();
   results = await new AxeBuilder({ page }).include('#importDialog').analyze();
   expect(results.violations.filter((item) => ['serious', 'critical'].includes(item.impact ?? ''))).toEqual([]);
 });
 
 test('keeps keyboard focus inside dialogs in both directions', async ({ page }) => {
   await page.goto('/');
-  const trigger = page.getByRole('button', { name: 'Import workouts' }).first();
+  const trigger = page.getByRole('button', { name: 'Import your files' });
   await trigger.focus();
   await trigger.press('Enter');
   const dialog = page.getByRole('dialog', { name: 'Import workouts' });
@@ -71,7 +71,7 @@ test('keeps keyboard focus inside dialogs in both directions', async ({ page }) 
 
 test('shows impossible CSV dates as errors and never enables import', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: 'Import workouts' }).first().click();
+  await page.getByRole('button', { name: 'Import your files' }).click();
   await page.locator('#workoutFiles').setInputFiles({
     name: 'impossible.csv',
     mimeType: 'text/csv',
@@ -81,6 +81,36 @@ test('shows impossible CSV dates as errors and never enables import', async ({ p
   await expect(page.getByText(/2026-02-31 08:00.*not a valid calendar date/)).toBeVisible();
   await expect(page.getByRole('button', { name: 'Import new sessions' })).toBeDisabled();
   await expect(page.getByText('Impossible', { exact: true })).not.toBeVisible();
+});
+
+test('rejects negative imported values without changing or committing them', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Import your files' }).click();
+  await page.locator('#workoutFiles').setInputFiles([
+    { name: 'negative-distance.csv', mimeType: 'text/csv', buffer: Buffer.from('date,type,title,duration,distance,load\n2026-08-28 08:00,Run,Negative distance,30,-5,-50') },
+    { name: 'negative-duration.csv', mimeType: 'text/csv', buffer: Buffer.from('date,type,title,duration,distance,load\n2026-08-28 10:00,Run,Negative duration,-30,5,10') },
+    { name: 'negative-load.csv', mimeType: 'text/csv', buffer: Buffer.from('date,type,title,duration,distance,load\n2026-08-28 12:00,Run,Negative load,30,5,-50') }
+  ]);
+  await expect(page.getByText('Some files need attention')).toBeVisible();
+  await expect(page.getByText(/row 2: distance must be 0 or more/)).toBeVisible();
+  await expect(page.getByText(/row 2: duration must be between 1 and 1440/)).toBeVisible();
+  await expect(page.getByText(/row 2: load must be between 0 and 10000/)).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Import new sessions' })).toBeDisabled();
+  await expect(page.getByText('Negative distance', { exact: true })).not.toBeVisible();
+  await expect(page.getByText('Negative duration', { exact: true })).not.toBeVisible();
+});
+
+test('rejects an untimed GPX track without inventing a date', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Import your files' }).click();
+  await page.locator('#workoutFiles').setInputFiles({
+    name: 'untimed.gpx',
+    mimeType: 'application/gpx+xml',
+    buffer: Buffer.from('<?xml version="1.0"?><gpx><trk><name>Untimed route</name><trkseg><trkpt lat="51.5" lon="-0.1"/><trkpt lat="51.51" lon="-0.11"/></trkseg></trk></gpx>')
+  });
+  await expect(page.getByText(/track points need timestamps/)).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Import new sessions' })).toBeDisabled();
+  await expect(page.getByText('Untimed route', { exact: true })).not.toBeVisible();
 });
 
 test('keeps a manual DST-gap time recoverable without a page error', async ({ page }) => {
@@ -119,9 +149,37 @@ test('mobile primary path remains usable at 390 CSS pixels', async ({ browser })
   const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
   const page = await context.newPage();
   await page.goto('/');
-  await expect(page.getByRole('button', { name: 'Import workouts' }).first()).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Try it with sample data' })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= 390)).toBe(true);
+  for (const locator of [page.getByRole('button', { name: 'Open field kit' }), page.getByRole('link', { name: 'Privacy' }), page.getByRole('link', { name: 'Terms' })]) {
+    const box = await locator.first().boundingBox();
+    expect(box?.width).toBeGreaterThanOrEqual(44);
+    expect(box?.height).toBeGreaterThanOrEqual(44);
+  }
   await context.close();
+});
+
+test('reflows at 200 percent and moves skip-link focus to main', async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 195, height: 422 } });
+  const page = await context.newPage();
+  await page.goto('/');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  await page.keyboard.press('Tab');
+  await expect(page.getByRole('link', { name: 'Skip to training log' })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('main')).toBeFocused();
+  await context.close();
+});
+
+test('publishes route metadata and a designed not-found page', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', 'https://training-log-merge.sociobot.in/');
+  await expect(page.locator('meta[property="og:image"]')).toHaveAttribute('content', /training-log-merge-og/);
+  await expect(page.locator('link[rel="apple-touch-icon"]')).toHaveCount(1);
+  await expect(page.getByText(/Built by Param Factory/)).toBeVisible();
+  await page.goto('/definitely-missing-page');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('This trail ends here.');
+  await expect(page.getByRole('link', { name: 'Return to your ledger' })).toBeVisible();
 });
 
 test('restores a one-time Field Kit license through the Sociobot contract', async ({ page }) => {

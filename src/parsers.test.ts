@@ -60,4 +60,18 @@ describe('training import normalization', () => {
   it('explains malformed CSV rows', () => {
     expect(() => parseCsv('title,duration\nRun,30', 'broken.csv', 'UTC')).toThrow(/needs a date column/);
   });
+
+  it.each([
+    ['duration', '-30', /duration must be between 1 and 1440/],
+    ['duration', '1441', /duration must be between 1 and 1440/],
+    ['distance', '-5', /distance must be 0 or more/],
+    ['load', '-50', /load must be between 0 and 10000/],
+    ['load', '10001', /load must be between 0 and 10000/],
+    ['distance', '5 laps', /distance “5 laps” is not a number/]
+  ])('rejects invalid imported %s values instead of changing them', (field, value, message) => {
+    expect(() => parseCsv(`date,type,title,duration,distance,load\n2026-08-28 08:00,run,Invalid,30,5,10`.replace(
+      new RegExp(`(?<=${field === 'duration' ? 'Invalid,' : field === 'distance' ? 'Invalid,30,' : 'Invalid,30,5,'})[^,]+`), value
+    ), 'invalid.csv', 'UTC')).toThrow(message);
+  });
+
 });

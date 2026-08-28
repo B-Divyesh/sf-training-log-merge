@@ -1,19 +1,20 @@
 # Training Log Merge
 
-Training Log Merge is a private, installable weekly training ledger for recreational athletes whose running, wearable, and strength records live in different apps. It imports existing exports instead of asking people to adopt another training platform.
+Merge CSV, GPX, and gym sessions into one private weekly training log. It is for recreational athletes whose records live in different apps.
 
 Live product: <https://training-log-merge.sociobot.in>
 
+Try the isolated sample ledger: <https://training-log-merge.sociobot.in/demo/>
+
 ## What it does
 
-- Imports multiple simple CSV and GPX files entirely in the browser.
-- Reconciles likely duplicates across sources using time, type, duration, and distance.
-- Keeps original source names, IDs, and links when the export provides them.
-- Adds and edits manual strength sessions with user-defined load and notes.
-- Reviews any week in an explicit IANA time zone, with type and source filters.
-- Exports the complete ledger to CSV for free.
-- Stores everything in IndexedDB and works offline after the first visit.
-- Offers an optional $19 one-time Field Kit for versioned JSON backup and restore through the Sociobot license service.
+- Import CSV and timestamped GPX files, preserve source fields, and skip likely duplicates.
+- Add and edit manual strength sessions.
+- Use an IANA time zone for dates that have no offset.
+- Export every session and its source fields as CSV for free.
+- Keep workout data in this browser and work offline after the first visit.
+- Try five sessions in a separate demo that never touches your real ledger.
+- Buy the optional Field Kit for $19 once to back up and restore the ledger as JSON.
 
 It does not coach, interpret heart rate, make health/performance claims, sync devices, or create a social network.
 
@@ -28,7 +29,7 @@ date,type,title,duration,distance,source
 
 Dates with `Z` or an offset keep that instant. Dates without an offset use the review time zone shown in Settings. Duration is minutes by default; `seconds`, `elapsed_time`, and `moving_time` are treated as seconds. `distance` is kilometres by default; `distance_m` and `meters` are converted. Optional columns include `notes`, `load`, `id`/`source_id`, and `url`/`source_url`.
 
-GPX imports read each `<trk>` as one session, using track-point timestamps and coordinates to calculate duration and distance. Imported values should always be checked against the source export.
+GPX imports read each `<trk>` as one session. Track-point timestamps set the date and duration, while coordinates set the distance. Tracks without timestamps are rejected instead of receiving an invented date. Each selected file can be up to 10 MB.
 
 ## Develop and verify
 
@@ -44,9 +45,11 @@ npm run build
 npm run test:e2e
 ```
 
+The observable product promises and their individual demo tests are listed in [`.factory/claims.json`](.factory/claims.json). Demo data and storage isolation are documented in [`.factory/demo.md`](.factory/demo.md).
+
 After deployment, `npm run test:live` checks production byte identity, security/cache headers, and the billing verification endpoint’s 429/`Retry-After` burst policy. It intentionally fails if any external release policy is unmet.
 
-The exact production build command is `npm run build`. Static output lands in `dist/`, with `index.html`, `/privacy/`, and `/terms/` ready for deployment. Playwright is pinned to 1.58.2; set `PLAYWRIGHT_BROWSERS_PATH` to the preinstalled browsers in factory workers or run `npx playwright install chromium` locally.
+The exact production build command is `npm run build`. Static output lands in `dist/`, with home, demo, privacy, terms, and 404 pages ready for deployment. Deploy `dist/` with `public/staticwebapp.config.json`; the factory owns infrastructure and DNS. Playwright is pinned to 1.58.2; set `PLAYWRIGHT_BROWSERS_PATH` to the preinstalled browsers in factory workers or run `npx playwright install chromium` locally.
 
 For staging billing, build with `VITE_BILLING_API=https://pilot-api.sociobot.in/api/v1`. Production defaults to the public Sociobot API. Product IDs are not embedded; the stable product slug is used.
 

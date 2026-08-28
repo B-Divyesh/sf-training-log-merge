@@ -80,10 +80,21 @@ export function localWallTimeToUtc(value: string, timezone: string): string {
   return new Date(guess).toISOString();
 }
 
-function numeric(value: string): number | undefined {
-  if (!value) return undefined;
-  const parsed = Number(value.replace(',', '.').replace(/[^\d.-]/g, ''));
-  return Number.isFinite(parsed) ? parsed : undefined;
+function numeric(value: string, field: string, location: string): number | undefined {
+  const clean = value.trim();
+  if (!clean) return undefined;
+  const match = clean.match(/^([+-]?(?:\d+(?:[.,]\d*)?|[.,]\d+))(?:\s*(?:km|m|min|mins|minutes|s|sec|seconds))?$/i);
+  const parsed = match ? Number(match[1].replace(',', '.')) : Number.NaN;
+  if (!Number.isFinite(parsed)) throw new Error(`${location}: ${field} “${value}” is not a number.`);
+  return parsed;
+}
+
+function requireRange(value: number | undefined, field: string, location: string, minimum: number, maximum?: number): void {
+  if (value === undefined) return;
+  if (value < minimum || (maximum !== undefined && value > maximum)) {
+    const range = maximum === undefined ? `${minimum} or more` : `between ${minimum} and ${maximum}`;
+    throw new Error(`${location}: ${field} must be ${range}.`);
+  }
 }
 
 export function parseCsv(text: string, fileName: string, timezone: string): ImportCandidate[] {
@@ -96,17 +107,22 @@ export function parseCsv(text: string, fileName: string, timezone: string): Impo
   if (!headers.some((h) => dateAliases.includes(h))) throw new Error(`${fileName} needs a date column (date, start_date, or started_at).`);
 
   return lines.slice(1).map((line, index) => {
+    const location = `${fileName}, row ${index + 2}`;
     const values = splitCsvLine(line, delimiter);
     const row = Object.fromEntries(headers.map((header, i) => [header, values[i] ?? '']));
     const dateRaw = findValue(row, dateAliases);
     const durationRaw = findValue(row, ['durationminutes', 'durationmin', 'duration', 'elapsedtime', 'movingtime', 'seconds']);
-    const durationValue = numeric(durationRaw) ?? 0;
+    const durationValue = numeric(durationRaw, 'duration', location);
     const durationHeader = headers.find((h) => ['durationminutes', 'durationmin', 'duration', 'elapsedtime', 'movingtime', 'seconds'].includes(h)) ?? '';
-    const durationMinutes = /seconds|elapsedtime|movingtime/.test(durationHeader) ? durationValue / 60 : durationValue;
+    const durationMinutes = durationValue === undefined ? 0 : (/seconds|elapsedtime|movingtime/.test(durationHeader) ? durationValue / 60 : durationValue);
     const distanceRaw = findValue(row, ['distancekm', 'kilometers', 'distance', 'distancem', 'meters']);
     const distanceHeader = headers.find((h) => ['distancekm', 'kilometers', 'distance', 'distancem', 'meters'].includes(h)) ?? '';
-    const rawDistance = numeric(distanceRaw);
+    const rawDistance = numeric(distanceRaw, 'distance', location);
     const distanceKm = rawDistance === undefined ? undefined : (/distancem|meters/.test(distanceHeader) ? rawDistance / 1000 : rawDistance);
+    const load = numeric(findValue(row, ['load', 'sessionload', 'rpe']), 'load', location);
+    if (durationValue !== undefined) requireRange(durationMinutes, 'duration', location, 1, 1440);
+    requireRange(distanceKm, 'distance', location, 0);
+    requireRange(load, 'load', location, 0, 10000);
     let startedAt: string;
     try { startedAt = localWallTimeToUtc(dateRaw, timezone); }
     catch (error) {
@@ -117,8 +133,8 @@ export function parseCsv(text: string, fileName: string, timezone: string): Impo
     const workout: ImportCandidate = {
       id: crypto.randomUUID(), startedAt, timezone,
       title: findValue(row, ['activityname', 'name', 'title', 'workout']) || `${type === 'other' ? 'Workout' : type[0].toUpperCase() + type.slice(1)}`,
-      type, durationMinutes: Math.max(0, durationMinutes), distanceKm,
-      load: numeric(findValue(row, ['load', 'sessionload', 'rpe'])),
+      type, durationMinutes, distanceKm,
+      load,
       notes: findValue(row, ['notes', 'description', 'comment']),
       source: findValue(row, ['source', 'app']) || fileName.replace(/\.csv$/i, ''),
       sourceId: findValue(row, ['activityid', 'sourceid', 'id']) || undefined,
@@ -153,8 +169,18 @@ export function parseGpx(text: string, fileName: string, timezone: string): Impo
     if (!timed.length) throw new Error(`${fileName}, track ${index + 1} has no usable points.`);
     const firstTime = timed.find((point) => point.time)?.time;
     const lastTime = [...timed].reverse().find((point) => point.time)?.time;
-    const startedAt = firstTime ? localWallTimeToUtc(firstTime, timezone) : new Date().toISOString();
-    const durationMinutes = firstTime && lastTime ? Math.max(0, (new Date(lastTime).getTime() - new Date(firstTime).getTime()) / 60_000) : 0;
+    if (!firstTime || !lastTime) throw new Error(`${fileName}, track ${index + 1}: track points need timestamps. Add times in the source export and try again.`);
+    let startedAt: string;
+    let endedAt: string;
+    try {
+      startedAt = localWallTimeToUtc(firstTime, timezone);
+      endedAt = localWallTimeToUtc(lastTime, timezone);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : 'a track timestamp could not be read.';
+      throw new Error(`${fileName}, track ${index + 1}: ${detail}`);
+    }
+    const durationMinutes = (new Date(endedAt).getTime() - new Date(startedAt).getTime()) / 60_000;
+    if (durationMinutes < 1 || durationMinutes > 1440) throw new Error(`${fileName}, track ${index + 1}: duration must be between 1 and 1440 minutes.`);
     const distanceKm = timed.slice(1).reduce((sum, point, i) => sum + haversine(timed[i].pos, point.pos), 0);
     const workout: ImportCandidate = {
       id: crypto.randomUUID(), startedAt, timezone,

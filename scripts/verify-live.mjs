@@ -25,7 +25,7 @@ assert(home.body.toString().includes('<title>Training Log Merge'), 'Live identit
 assert(home.result.headers.get('content-security-policy')?.includes("default-src 'self'"), 'CSP is missing from the live home.');
 assert(home.result.headers.has('permissions-policy'), 'Permissions-Policy is missing from the live home.');
 
-const scriptPath = home.body.toString().match(/src="(\/assets\/app-[^"]+\.js)"/)?.[1];
+const scriptPath = home.body.toString().match(/src="(\/assets\/[^"]+\.js)"/)?.[1];
 assert(scriptPath, 'Could not identify the live application bundle.');
 const script = await response(`${site}${scriptPath}`);
 assert(script.result.headers.get('cache-control')?.includes('immutable'), 'The live hashed bundle is not cached immutably.');
