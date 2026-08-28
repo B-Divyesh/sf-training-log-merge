@@ -1,0 +1,46 @@
+import { describe, expect, it } from 'vitest';
+import { localWallTimeToUtc, makeFingerprint, normalizeType, parseCsv, toCsv } from './parsers';
+
+describe('training import normalization', () => {
+  it('maps common activity names to neutral types', () => {
+    expect(normalizeType('Trail Run')).toBe('run');
+    expect(normalizeType('Weight Training')).toBe('strength');
+    expect(normalizeType('Kayak')).toBe('other');
+  });
+
+  it('interprets local wall time in the chosen IANA time zone', () => {
+    expect(localWallTimeToUtc('2026-08-28 07:30', 'America/New_York')).toBe('2026-08-28T11:30:00.000Z');
+    expect(localWallTimeToUtc('2026-08-28T07:30:00+02:00', 'UTC')).toBe('2026-08-28T05:30:00.000Z');
+  });
+
+  it('parses quoted CSV, preserves source links, and normalizes seconds/meters', () => {
+    const csv = [
+      'start_date,activity_type,activity_name,elapsed_time,distance_m,notes,source,url',
+      '2026-08-28T06:00:00Z,Running,"Morning, easy",1800,5200,"Felt, smooth",Watch export,https://example.test/activity/1'
+    ].join('\n');
+    const [workout] = parseCsv(csv, 'watch.csv', 'UTC');
+    expect(workout.title).toBe('Morning, easy');
+    expect(workout.type).toBe('run');
+    expect(workout.durationMinutes).toBe(30);
+    expect(workout.distanceKm).toBe(5.2);
+    expect(workout.sourceUrl).toBe('https://example.test/activity/1');
+  });
+
+  it('gives equivalent cross-source sessions the same duplicate fingerprint', () => {
+    const base = { startedAt: '2026-08-28T06:01:00.000Z', type: 'run' as const, durationMinutes: 31, distanceKm: 5.02 };
+    const close = { startedAt: '2026-08-28T06:02:00.000Z', type: 'run' as const, durationMinutes: 30, distanceKm: 5.04 };
+    expect(makeFingerprint(base)).toBe(makeFingerprint(close));
+  });
+
+  it('exports a portable CSV with provenance', () => {
+    const [workout] = parseCsv('date,type,duration,distance,source\n2026-08-28,Run,45,7.5,Watch', 'one.csv', 'UTC');
+    const output = toCsv([workout]);
+    expect(output).toContain('started_at,timezone,title');
+    expect(output).toContain('"Watch"');
+    expect(output).toContain('"7.50"');
+  });
+
+  it('explains malformed CSV rows', () => {
+    expect(() => parseCsv('title,duration\nRun,30', 'broken.csv', 'UTC')).toThrow(/needs a date column/);
+  });
+});
