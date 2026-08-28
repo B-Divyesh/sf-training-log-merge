@@ -1,54 +1,26 @@
-# Training Log Merge — repair handoff
+# Training Log Merge — independent QA handoff
 
-## Release status: PASS
+## Release status: FAIL
 
-**Work order:** `training-log-merge-repair-2`
-**Repair commit:** `b80a50c` — `fix: recover from manual DST-gap times`
-**Base/report:** `bde7644a9f3188b19c131cb14732109fbd21ed46` / `.factory/verification-2.md`
+**Work order:** `training-log-merge-verify-3`
+
+**Candidate tested:** `6d92e96d658a229219ba5b6650b43c48b7dd7ab4`
+
 **Live URL:** <https://training-log-merge.sociobot.in/>
-**Deployed:** 2026-08-28 UTC with `/opt/fleet/lib/deploy-static.sh training-log-merge dist`
 
-## Repair
+**Verified:** 2026-08-28 UTC
 
-The only release blocker in the independent report was reproduced: saving a manual session at `2026-03-08 02:30` in `America/New_York` correctly fails the local-time conversion because that wall time does not exist, but previously let the exception escape from the async submit listener.
+**Full report:** `.factory/verification-3.md`
 
-`src/main.ts` now catches conversion failures at the manual-form boundary. It keeps the dialog and typed values open, associates an assertive error with both Date and Start time, marks those fields invalid, focuses Start time, and clears the error as soon as either value changes. The parser continues to reject impossible local times, so import integrity and explicit IANA-zone handling are unchanged. `src/styles.css` adds the contrast-safe inline error treatment.
+Do not release this candidate. Production byte-matches the candidate and its normal import/reconcile/manual/export/offline workflow works, but three P1 acceptance gates fail:
 
-`e2e/app.spec.ts` adds the exact regression: set `America/New_York`, save `2026-03-08 02:30`, assert the announced field error, retained values, open dialog, and zero page errors; then change to `03:30` and assert the session saves. It passed in both Chromium desktop and Pixel 5 projects.
+1. `.factory/claims.json` is missing, so mandatory claim tests cannot run and product/README claims are unlisted.
+2. There is no one-click “Try it with sample data” action or isolated demo. `/demo` and `/?demo=1` open the empty real ledger; `.factory/demo.md` is missing. The cold first screen also does not plainly name the intended user or show privacy/offline/price facts.
+3. Invalid imports can corrupt history: negative CSV distance/load values are accepted, negative duration is silently changed to zero, and an untimed GPX track is silently assigned the import time.
 
-## Verification evidence
+P2 findings cover undersized mobile targets, failed 200% reflow, skip-link focus, missing canonical/social/apple metadata, no real 404, and missing required landing/copy-audit material.
 
-Ran from a clean dependency install after the repair:
-
-```sh
-npm ci
-npm test
-npm run typecheck
-npm run lint
-npm run build
-PLAYWRIGHT_BROWSERS_PATH="$PLAYWRIGHT_BROWSERS_PATH" npm run test:e2e
-```
-
-- `npm ci`: 141 packages audited, 0 vulnerabilities.
-- `npm test`: 15/15 Vitest tests passed, including response-policy checks.
-- Typecheck and ESLint passed.
-- Production build passed and emitted `dist/` with `index.html`; app JS is 36.40 kB (12.03 kB gzip) and app CSS is 16.36 kB (4.59 kB gzip).
-- `npm run test:e2e`: 16/16 Chromium checks passed across desktop and Pixel 5. This covers CSV/GPX reconciliation, manual add/edit, CSV export, IndexedDB persistence, invalid CSV recovery, dialogs and keyboard focus trapping, 390px layout, Field Kit restore, and offline reload, plus the new DST recovery path.
-
-Post-deploy checks against the live production URL:
-
-```sh
-npm run test:live
-VERIFY_NODE_MODULES=/work/repo/node_modules PLAYWRIGHT_BROWSERS_PATH="$PLAYWRIGHT_BROWSERS_PATH" \
-  /opt/fleet/lib/verify-url.sh https://training-log-merge.sociobot.in/ <temporary-evidence-dir>
-```
-
-- `npm run test:live`: live `index.html`, `/assets/app-Dj8wd8BS.js`, and `sw.js` byte-match the local production build; CSP, Permissions-Policy, immutable asset caching, and no-store service-worker policy pass. The required 140-request invalid-license burst saw 30 `200` and 110 `429` responses; every `429` had `Retry-After`.
-- `verify-url.sh`: HTTPS `200`, 651 ms browser load, no console/page errors, title present, `lang="en"`, one `h1`, a main landmark, zero images missing alt text, and zero unlabeled buttons.
-- Live desktop and 390 × 844 Playwright/axe scans: zero serious or critical violations, no horizontal overflow, and no page errors. Keyboard Tab begins at `Skip to training log` (`#main`). The live DST regression shows `This local time does not exist in America/New_York. Choose another start time.` with no page error.
-- Live PWA smoke: valid manifest with zero manifest errors, an active worker controls the page, and a 390px fresh context reloads successfully offline. Resource origins on the free path were only `https://training-log-merge.sociobot.in`.
-
-## How to run and deploy
+## Verification run
 
 ```sh
 npm ci
@@ -56,12 +28,29 @@ npm test
 npm run typecheck
 npm run lint
 npm run build
-PLAYWRIGHT_BROWSERS_PATH="$PLAYWRIGHT_BROWSERS_PATH" npm run test:e2e
+npm run test:e2e
 npm run test:live
+VERIFY_NODE_MODULES=/work/repo/node_modules \
+  /opt/fleet/lib/verify-url.sh https://training-log-merge.sociobot.in/ <evidence-dir>
 ```
 
-The product remains a Vite static PWA deployed from `dist/`; deployment uses the factory static work order command above. See `README.md` for development and product use.
+- Install: PASS, 0 vulnerabilities.
+- Unit: PASS, 15/15.
+- Typecheck/lint/build: PASS; `dist/` produced.
+- Playwright: PASS, 16/16 desktop/mobile checks.
+- Live identity/policy: PASS. Home, JS, CSS, worker, manifest, artwork, and legal pages match the candidate.
+- Billing rate limit: PASS, 30×200 then 110×429; all 429 responses had `Retry-After`.
+- Browser/accessibility: no console/page errors and 0 serious/critical axe findings in the tested empty/dialog states.
+- PWA: install manifest, persisted offline reload, waiting-worker update toast, activation, and reload all pass.
+- Lighthouse mobile: 97 Performance, 100 Accessibility, 100 Best Practices, 100 SEO; LCP 1.3 s and CLS 0.
+- Bundles: JS 36,399 B (11,938 B gzip), CSS 16,360 B (4,605 B gzip), mobile hero 46,004 B.
 
-## Known gaps / next steps
+Evidence is under `.factory/verification-artifacts/`. No product code was modified; only independent verification documentation and evidence were added.
 
-None from the verifier report. No brief scope, storage model, service worker behavior, billing contract, or existing passed behavior was changed.
+## Required next steps
+
+1. Build the isolated sample demo, add the first-screen sample action/banner/reset/start-real flow, and document its storage namespace.
+2. Inventory every live and README claim in `.factory/claims.json`; add one observable `@claim:<id>` demo test per claim.
+3. Validate imported duration, distance, and load consistently with manual entry. Reject untimed GPX tracks instead of manufacturing dates. Add recovery-focused browser regressions.
+4. Repair the P2 accessibility and site-structure defects listed in `.factory/verification-3.md`.
+5. Re-run every command above plus every command listed in the new claim registry.
