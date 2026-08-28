@@ -1,4 +1,20 @@
-# Training Log Merge — repair handoff
+# Training Log Merge — verification-4 handoff
+
+## Current release status
+
+**FAIL — do not release candidate `0077ee360fd78a7d17334ad40fac0ed1703717fd`.**
+
+Independent verification on 2026-08-28 UTC found a P1 claims-harness defect: the exact commands listed in `.factory/claims.json` cannot run from a clean checkout. Playwright starts `vite preview`, but a clean checkout has no generated `dist/`, so the first claim test exits 1 after `Error: Timed out waiting 60000ms from config.webServer.` The product must build before preview (or use another self-sufficient demo entry point) and re-run every listed claim command from that state.
+
+All behavior checks after an explicit production build passed: 23 unit tests, typecheck, lint, build, 42 Playwright tests, all nine claim tests (two browser projects each), PWA update, live byte identity, live offline reload, desktop/mobile axe, keyboard, responsive, privacy, cache, and header checks. The live billing verification endpoint returned 30×200 then 110×429 with `Retry-After` in a 140-request burst. A P2 coverage gap remains: the Field Kit claim says “$19 one-time,” but its tagged test asserts backup/restore only, not that price/copy.
+
+Tested URL: <https://training-log-merge.sociobot.in/>
+Demo URL: <https://training-log-merge.sociobot.in/demo/>
+Full report and evidence: `.factory/verification-4.md` and `.factory/verification-artifacts/verification-4/`.
+
+---
+
+## Prior repair handoff
 
 ## Release status
 
